@@ -2,15 +2,17 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
+#define tombol 15
+
 //Konfigurasi WiFi
-const char *ssid = "L. Adam Damara";
+const char *ssid = "Aa_plus";
 const char *password = "adamdamara";
 
 //IP Address ataupun Domain Web Server
-const char *host = "192.168.43.207";
+const char *host = "192.168.100.55";
 
 constexpr uint8_t RST_PIN =  0; // Pin D3 Pada Wemos D1 R1 Mini
-constexpr uint8_t SS_PIN =  15; // Pin D8 Pada Wemos D1 R1 Mini
+constexpr uint8_t SS_PIN =  2; // Pin D4 Pada Wemos D1 R1 Mini
 
 /*
   Buat identitas mesin untuk mencatat di mesin mana pengguna yang
@@ -25,9 +27,13 @@ constexpr uint8_t SS_PIN =  15; // Pin D8 Pada Wemos D1 R1 Mini
 */
 String uid, url, idmesin = String(WiFi.macAddress());
 
+int kategori = 1; //default kategori absen
+
+
 MFRC522 mfrc522(SS_PIN, RST_PIN); //Buat instance RC522
 
 void setup() {
+  pinMode(tombol, INPUT_PULLUP);
   Serial.begin(9600); //Inisialisasi komunikasi serial untuk debuging
   delay(1000);
   Serial.println("Setup");
@@ -76,6 +82,16 @@ void loop() {
     posisi idle
   */
   if ( ! mfrc522.PICC_IsNewCardPresent()) {
+    //cek tombol
+    if (digitalRead(tombol) == 1) {
+      kategori += 1;
+      if (kategori > 4) {
+        kategori = 1;
+      }
+      Serial.println(kategori);
+      delay(500);
+    }
+
     //delay(50);
     return;
   }
@@ -124,7 +140,7 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
   Serial.println(idmesin);
 
   url = "/absensi/machine.php?tag=";
-  url = url + uid + "&idmesin=" + idmesin;
+  url = url + uid + "&idmesin=" + idmesin + "&kategori=" + kategori;
   Serial.print("Requesting URL: ");
   Serial.println(url);
   Serial.println();
