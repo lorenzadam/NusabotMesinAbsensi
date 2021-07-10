@@ -1,8 +1,26 @@
+/*
+ * Gunakan Core ESP8266 versi 2.7.4, hal ini berpengaruh terhadap epoch time dari
+ * NTP Server.
+ * 
+ * Kami belum mengetahui kenapa terjadi seperti itu. Perlu gunakan metode lain
+ * untuk mendapatkan tanggal jika ingin menggunakan Core ESP8266 diatas versi 2.7.4
+ * 
+ * Credits:
+ * - Lorenz Adam D.
+ * - Wiku
+ * - Nusabot Team
+ * 
+ * Proyek ini dilisensikan dibawah GPL3 (General Public License V.3)
+ * Nusabot berhak mengganti lisensi di rilis-rilis yang akan datang.
+ */
+
+#include <NTPClient.h>
 #include "ESP8266WiFi.h"
 #include <SPI.h>
 #include <MFRC522.h>
 #include <Wire.h>
 #include "SSD1306.h" //https://github.com/ThingPulse/esp8266-oled-ssd1306
+#include <WiFiUdp.h>
 
 #define tombol 15
 
@@ -16,13 +34,21 @@ const char *host = "192.168.100.55";
 constexpr uint8_t RST_PIN =  0; // Pin D3 Pada Wemos D1 R1 Mini
 constexpr uint8_t SS_PIN =  2; // Pin D4 Pada Wemos D1 R1 Mini
 
+unsigned long previousMillis = 0, interval = 1000, epochTime;
+
 /*
    Address diatur ke 0x3C, dari coba-coba karena dari scanner tidak
-   muncul.D2 (SDA/Serial Data), dan D5 (SCK/Serial Clock).
+   muncul. D2 (SDA/Serial Data), dan D5 (SCK/Serial Clock).
    Pakai OLED buatan Tiongkok, jadi tidak menggunakan library dari
    Adafruit
 */
 SSD1306  display(0x3C, D1, D2);
+
+/*
+  Ambil waktu dari NTP Server
+*/
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200);
 
 /*
   Buat identitas mesin untuk mencatat di mesin mana pengguna yang
@@ -36,6 +62,8 @@ SSD1306  display(0x3C, D1, D2);
   jika tidak mesin tidak disertai network adaptor.
 */
 String uid, url, textKategori = "Masuk", idmesin = String(WiFi.macAddress());
+String hari[7] = {"Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jum'at", "Sabtu"};
+String bulan[12]={"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"};
 
 int kategori = 1; //default kategori absen
 
@@ -73,6 +101,8 @@ void setup() {
   Serial.print("Alamat IP: ");
   Serial.println(WiFi.localIP());
 
+  timeClient.begin();
+
   /*
      Uncomment jika menggunakan Arduino based ATMEGA32U4
      Agar uC Jangan lakukan apapun jika tidak ada
@@ -88,9 +118,20 @@ void setup() {
 }
 
 void loop() {
+  timeClient.update();
+
+  epochTime = timeClient.getEpochTime();
+  struct tm *ptm = gmtime ((time_t *)&epochTime); //NTP time structure
+  int tanggalIni = ptm->tm_mday;
+  int bulanIni = ptm->tm_mon+1;
+  int tahunIni = ptm->tm_year+1900; //NTP mengambil detik sejak tahun 1900
+  String namaBulan = bulan[bulanIni-1];
+  String tanggal = String(tanggalIni) + " " + String(bulan[bulanIni-1]) + "  " +String(tahunIni) ;
+  
+  unsigned long currentMillis = millis();
   WiFiClient client;
-  const int httpPort = 80;
-  if (!client.connect(host, httpPort)) {
+  timeClient.update();
+  if (!client.connect(host, 80)) {
     Serial.println("koneksi gagal");
     display.clear();
     display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -126,22 +167,27 @@ void loop() {
           break;
       }
       Serial.println(textKategori);
-      delay(500);
+      delay(500); //agar penambahannya tidak terlalu cepat
     }
-    display.clear();
-    display.setFont(ArialMT_Plain_24);
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    display.drawString(128 / 2, 10, "03:42:57");
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(128 / 2, 0, "02-10-2021");
-    display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    display.drawString(128, 50, String(WiFi.RSSI()) + " dBm");
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.drawString(0, 50, textKategori);
-    display.display();
 
-    //delay(50);
-    return;
+    if (currentMillis - previousMillis > interval) {
+      previousMillis = currentMillis;
+      
+      display.clear();
+      display.setFont(ArialMT_Plain_24);
+      display.setTextAlignment(TEXT_ALIGN_CENTER);
+      display.drawString(128 / 2, 10, String(timeClient.getFormattedTime()));
+      display.setFont(ArialMT_Plain_10);
+      display.drawString(128 / 2, 0, String(hari[timeClient.getDay()]) + ", " + tanggal);
+      display.setTextAlignment(TEXT_ALIGN_RIGHT);
+      display.drawString(128, 50, String(WiFi.RSSI()) + " dBm");
+      display.setTextAlignment(TEXT_ALIGN_LEFT);
+      display.drawString(0, 50, textKategori);
+      display.display();
+
+      //delay(50);
+      return;
+    }
   }
 
   // pilih satu tag
