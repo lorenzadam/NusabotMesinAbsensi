@@ -71,35 +71,25 @@ MFRC522 mfrc522(SS_PIN, RST_PIN); //Buat instance RC522
 
 void setup() {
   pinMode(tombol, INPUT_PULLUP);
-  Serial.begin(9600); //Inisialisasi komunikasi serial untuk debuging
   delay(1000);
-  Serial.println("Setup");
   display.init();
   display.flipScreenVertically();
 
   //menghubungkan ke wifi
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  Serial.println("");
 
-  Serial.print("Menghubungkan");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
     display.setTextAlignment(TEXT_ALIGN_CENTER);
     display.drawStringMaxWidth(128 / 2, 64 / 2, 128, "Menghubungkan ke WiFi");
     display.display();
   }
 
-  Serial.println("");
-  Serial.print("Terhubung ke ");
-  Serial.println(ssid);
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(128 / 2, 64 / 2, "Terhubung Ke Jaringan");
   display.display();
-  Serial.print("Alamat IP: ");
-  Serial.println(WiFi.localIP());
 
   timeClient.begin();
 
@@ -112,8 +102,6 @@ void setup() {
   SPI.begin();      // Inisialisasi SPI bus
   mfrc522.PCD_Init();   // Inisialisasi MFRC522
   mfrc522.PCD_DumpVersionToSerial();  // Untuk menampilkan detail detail PCD - MFRC522 Card Reader
-  Serial.println(F("Scan PICC untuk melihat UID..."));
-  Serial.println("Setup done");
   delay(1000); //agar pesan terhubung ke jaringan bisa tampil
 }
 
@@ -132,7 +120,6 @@ void loop() {
   WiFiClient client;
   timeClient.update();
   if (!client.connect(host, 80)) {
-    Serial.println("koneksi gagal");
     display.clear();
     display.setTextAlignment(TEXT_ALIGN_CENTER);
     display.drawStringMaxWidth(128 / 2, 64 / 2, 128 , "Tidak Dapat Terhubung Ke Server");
@@ -166,7 +153,6 @@ void loop() {
           textKategori = "Pulang";
           break;
       }
-      Serial.println(textKategori);
       delay(500); //agar penambahannya tidak terlalu cepat
     }
 
@@ -205,7 +191,11 @@ void loop() {
   unsigned long timeout = millis();
   while (client.available() == 0) {
     if (millis() - timeout > 1000) {
-      Serial.println(">>> Client Timeout !");
+      display.clear();
+      display.setFont(ArialMT_Plain_10);
+      display.setTextAlignment(TEXT_ALIGN_CENTER);
+      display.drawStringMaxWidth(128 / 2, 64 / 2, 128, "Tidak dapat mengirimkan data absen ke server.");
+      display.display();
       client.stop();
       return;
     }
@@ -220,11 +210,7 @@ void loop() {
 
   while (client.available()) {
     String line = client.readStringUntil('\r');
-    Serial.print(line);
   }
-
-  Serial.println();
-  Serial.println("closing connection");
 
   delay(1000); // ambil aman, biarkan uC posisi idle
 }
@@ -237,13 +223,8 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     uid = uid + String(buffer[i], HEX);
   }
-  Serial.println(uid);
-  Serial.println(idmesin);
 
   url = "/absensi/machine.php?tag=";
   url = url + uid + "&idmesin=" + idmesin + "&kategori=" + kategori;
-  Serial.print("Requesting URL: ");
-  Serial.println(url);
-  Serial.println();
   uid = ""; //kosongkan variabel UID setelah selesai digunakan
 }
