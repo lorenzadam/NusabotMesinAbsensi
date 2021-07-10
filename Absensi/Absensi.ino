@@ -1,6 +1,9 @@
 #include "ESP8266WiFi.h"
 #include <SPI.h>
 #include <MFRC522.h>
+#include <Wire.h>
+#include "SSD1306.h" //https://github.com/ThingPulse/esp8266-oled-ssd1306
+#include "images.h"
 
 #define tombol 15
 
@@ -15,6 +18,14 @@ constexpr uint8_t RST_PIN =  0; // Pin D3 Pada Wemos D1 R1 Mini
 constexpr uint8_t SS_PIN =  2; // Pin D4 Pada Wemos D1 R1 Mini
 
 /*
+   Address diatur ke 0x3C, dari coba-coba karena dari scanner tidak
+   muncul.D2 (SDA/Serial Data), dan D5 (SCK/Serial Clock).
+   Pakai OLED buatan Tiongkok, jadi tidak menggunakan library dari
+   Adafruit
+*/
+SSD1306  display(0x3C, D1, D2);
+
+/*
   Buat identitas mesin untuk mencatat di mesin mana pengguna yang
   bersangkutan yang melakukan absensi, nilai variabel ini akan
   disimpan di basis data.
@@ -25,7 +36,7 @@ constexpr uint8_t SS_PIN =  2; // Pin D4 Pada Wemos D1 R1 Mini
   update melalui OTA. Well secara praktik OTA tidak dapat dilakukan
   jika tidak mesin tidak disertai network adaptor.
 */
-String uid, url, idmesin = String(WiFi.macAddress());
+String uid, url, textKategori = "Masuk", idmesin = String(WiFi.macAddress());
 
 int kategori = 1; //default kategori absen
 
@@ -37,6 +48,8 @@ void setup() {
   Serial.begin(9600); //Inisialisasi komunikasi serial untuk debuging
   delay(1000);
   Serial.println("Setup");
+  display.init();
+  display.flipScreenVertically();
 
   //menghubungkan ke wifi
   WiFi.mode(WIFI_STA);
@@ -47,11 +60,16 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
+    display.drawString(0, 0, "Menghubungkan ke WiFi");
+    display.display();
   }
 
   Serial.println("");
   Serial.print("Terhubung ke ");
   Serial.println(ssid);
+  display.clear();
+  display.drawString(0, 0, "Terhubung Ke Jaringan");
+  display.display();
   Serial.print("Alamat IP: ");
   Serial.println(WiFi.localIP());
 
@@ -73,6 +91,9 @@ void loop() {
   const int httpPort = 80;
   if (!client.connect(host, httpPort)) {
     Serial.println("koneksi gagal");
+    display.clear();
+    display.drawStringMaxWidth(0, 0, 128 , "Tidak Dapat Terhubung Ke Server");
+    display.display();
     return;
   }
 
@@ -88,9 +109,27 @@ void loop() {
       if (kategori > 4) {
         kategori = 1;
       }
-      Serial.println(kategori);
+      switch (kategori) {
+        case 1:
+          textKategori = "Masuk";
+          break;
+        case 2:
+          textKategori = "Mulai Istirahat";
+          break;
+        case 3:
+          textKategori = "Selesai Istirahat";
+          break;
+        case 4:
+          textKategori = "Pulang";
+          break;
+      }
+      Serial.println(textKategori);
       delay(500);
     }
+    display.clear();
+    display.drawString(0, 0, "Terhubung Ke Jaringan");
+    display.drawString(0, 20, textKategori);
+    display.display();
 
     //delay(50);
     return;
