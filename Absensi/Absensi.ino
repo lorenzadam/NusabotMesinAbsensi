@@ -1,18 +1,18 @@
 /*
- * Gunakan Core ESP8266 versi 2.7.4, hal ini berpengaruh terhadap epoch time dari
- * NTP Server.
- * 
- * Kami belum mengetahui kenapa terjadi seperti itu. Perlu gunakan metode lain
- * untuk mendapatkan tanggal jika ingin menggunakan Core ESP8266 diatas versi 2.7.4
- * 
- * Credits:
- * - Lorenz Adam D.
- * - Wiku
- * - Nusabot Team
- * 
- * Proyek ini dilisensikan dibawah GPL3 (General Public License V.3)
- * Nusabot berhak mengganti lisensi di rilis-rilis yang akan datang.
- */
+   Gunakan Core ESP8266 versi 2.7.4, hal ini berpengaruh terhadap epoch time dari
+   NTP Server.
+
+   Kami belum mengetahui kenapa terjadi seperti itu. Perlu gunakan metode lain
+   untuk mendapatkan tanggal jika ingin menggunakan Core ESP8266 diatas versi 2.7.4
+
+   Credits:
+   - Lorenz Adam D.
+   - Wiku
+   - Nusabot Team
+
+   Proyek ini dilisensikan dibawah GPL3 (General Public License V.3)
+   Nusabot berhak mengganti lisensi di rilis-rilis yang akan datang.
+*/
 
 #include <NTPClient.h>
 #include "ESP8266WiFi.h"
@@ -63,7 +63,7 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200);
 */
 String uid, url, textKategori = "Masuk", idmesin = String(WiFi.macAddress());
 String hari[7] = {"Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jum'at", "Sabtu"};
-String bulan[12]={"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"};
+String bulan[12] = {"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"};
 
 int kategori = 1; //default kategori absen
 
@@ -123,11 +123,11 @@ void loop() {
   epochTime = timeClient.getEpochTime();
   struct tm *ptm = gmtime ((time_t *)&epochTime); //NTP time structure
   int tanggalIni = ptm->tm_mday;
-  int bulanIni = ptm->tm_mon+1;
-  int tahunIni = ptm->tm_year+1900; //NTP mengambil detik sejak tahun 1900
-  String namaBulan = bulan[bulanIni-1];
-  String tanggal = String(tanggalIni) + " " + String(bulan[bulanIni-1]) + "  " +String(tahunIni) ;
-  
+  int bulanIni = ptm->tm_mon + 1;
+  int tahunIni = ptm->tm_year + 1900; //NTP mengambil detik sejak tahun 1900
+  String namaBulan = bulan[bulanIni - 1];
+  String tanggal = String(tanggalIni) + " " + String(bulan[bulanIni - 1]) + "  " + String(tahunIni) ;
+
   unsigned long currentMillis = millis();
   WiFiClient client;
   timeClient.update();
@@ -172,7 +172,7 @@ void loop() {
 
     if (currentMillis - previousMillis > interval) {
       previousMillis = currentMillis;
-      
+
       display.clear();
       display.setFont(ArialMT_Plain_24);
       display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -210,6 +210,13 @@ void loop() {
       return;
     }
   }
+  display.clear();
+  display.setFont(ArialMT_Plain_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(128 / 2, 10, textKategori);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(128 / 2, 30, "Data Absen Direkam :)");
+  display.display();
 
   while (client.available()) {
     String line = client.readStringUntil('\r');
