@@ -3,7 +3,6 @@
 #include <MFRC522.h>
 #include <Wire.h>
 #include "SSD1306.h" //https://github.com/ThingPulse/esp8266-oled-ssd1306
-#include "images.h"
 
 #define tombol 15
 
@@ -40,7 +39,6 @@ String uid, url, textKategori = "Masuk", idmesin = String(WiFi.macAddress());
 
 int kategori = 1; //default kategori absen
 
-
 MFRC522 mfrc522(SS_PIN, RST_PIN); //Buat instance RC522
 
 void setup() {
@@ -60,7 +58,8 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
-    display.drawString(0, 0, "Menghubungkan ke WiFi");
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawStringMaxWidth(128 / 2, 64 / 2, 128, "Menghubungkan ke WiFi");
     display.display();
   }
 
@@ -68,7 +67,8 @@ void setup() {
   Serial.print("Terhubung ke ");
   Serial.println(ssid);
   display.clear();
-  display.drawString(0, 0, "Terhubung Ke Jaringan");
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(128 / 2, 64 / 2, "Terhubung Ke Jaringan");
   display.display();
   Serial.print("Alamat IP: ");
   Serial.println(WiFi.localIP());
@@ -84,6 +84,7 @@ void setup() {
   mfrc522.PCD_DumpVersionToSerial();  // Untuk menampilkan detail detail PCD - MFRC522 Card Reader
   Serial.println(F("Scan PICC untuk melihat UID..."));
   Serial.println("Setup done");
+  delay(1000); //agar pesan terhubung ke jaringan bisa tampil
 }
 
 void loop() {
@@ -92,7 +93,8 @@ void loop() {
   if (!client.connect(host, httpPort)) {
     Serial.println("koneksi gagal");
     display.clear();
-    display.drawStringMaxWidth(0, 0, 128 , "Tidak Dapat Terhubung Ke Server");
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawStringMaxWidth(128 / 2, 64 / 2, 128 , "Tidak Dapat Terhubung Ke Server");
     display.display();
     return;
   }
@@ -127,8 +129,15 @@ void loop() {
       delay(500);
     }
     display.clear();
-    display.drawString(0, 0, "Terhubung Ke Jaringan");
-    display.drawString(0, 20, textKategori);
+    display.setFont(ArialMT_Plain_24);
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawString(128 / 2, 10, "03:42:57");
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(128 / 2, 0, "02-10-2021");
+    display.setTextAlignment(TEXT_ALIGN_RIGHT);
+    display.drawString(128, 50, String(WiFi.RSSI()) + " dBm");
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    display.drawString(0, 50, textKategori);
     display.display();
 
     //delay(50);
