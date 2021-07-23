@@ -21,15 +21,86 @@
 #include <Wire.h>
 #include "SSD1306.h" //https://github.com/ThingPulse/esp8266-oled-ssd1306
 #include <WiFiUdp.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
 
 #define tombol 15
 
+//halaman html
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<style>
+input[type=text], select {
+  width: 100%;
+  padding: 12px 20px;
+  margin: 8px 0;
+  display: inline-block;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+input[type=submit] {
+  width: 100%;
+  background-color: #4CAF50;
+  color: white;
+  padding: 14px 20px;
+  margin: 8px 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+input[type=submit]:hover {
+  background-color: #45a049;
+}
+
+div {
+  border-radius: 5px;
+  background-color: #f2f2f2;
+  padding: 20px;
+}
+</style>
+<body>
+
+<h3>Pengaturan Alat | Nusabot</h3>
+
+<div>
+  <form action="/action_page">
+    <label for="ssid">SSID</label>
+    <input type="text" id="fname" name="ssidNew" placeholder="SSID WiFi Anda">
+
+    <label for="pass">Password</label>
+    <input type="text" id="pass" name="passNew" placeholder="Kosongkan jika tidak menggunakan password">
+
+    <label for="zona">Zona Waktu</label>
+    <select id="zona" name="zona">
+      <option value="1">WIB</option>
+      <option value="2">WITA</option>
+      <option value="3">WIT</option>
+    </select>
+  
+    <input type="submit" value="Simpan">
+  </form>
+</div>
+
+</body>
+</html>
+
+)rawliteral";
+
 //Konfigurasi WiFi
-const char *ssid = "Aa_plus";
-const char *password = "adamdamara";
+const char *ssid = "Nusabot-Absensi";
+const char *password = "";
+
+String ssidNew = "", passNew, zona;
+
+ESP8266WebServer server(80); //Server pada port 80
 
 //IP Address ataupun Domain Web Server
-const char *host = "192.168.100.55";
+const char *host = "absensi.nusabot.id";
 
 constexpr uint8_t RST_PIN =  0; // Pin D3 Pada Wemos D1 R1 Mini
 constexpr uint8_t SS_PIN =  2; // Pin D4 Pada Wemos D1 R1 Mini
@@ -69,16 +140,40 @@ int kategori = 1; //default kategori absen
 
 MFRC522 mfrc522(SS_PIN, RST_PIN); //Buat instance RC522
 
-void setup() {
-  pinMode(tombol, INPUT_PULLUP);
-  delay(1000);
-  display.init();
-  display.flipScreenVertically();
+/*
+  Routine ini akan dieksekusi saat membuka browser
+*/
+void handleRoot() {
+ server.send(200, "text/html", index_html); //Send web page
+}
 
-  //menghubungkan ke wifi
+/*
+  Routine ini akan dieksekusi saat tombol submit di klik
+*/
+void handleForm() {
+  ssidNew = server.arg("ssidNew"); 
+  passNew = server.arg("passNew");
+  zona = server.arg("zona"); 
+
+//  Serial.print("ssidNew:");
+//  Serial.println(ssidNew);
+//
+//  Serial.print("passNew:");
+//  Serial.println(passNew);
+//
+//  Serial.print("Zona:");
+//  Serial.println(zona);
+
+  String s = "<a href='/'> Go Back </a>";
+  server.send(200, "text/html", s); //Send web page
+
+  WiFi.softAPdisconnect (true);
+//  Serial.println("SoftAP End");
+  
   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
+  WiFi.begin(ssidNew, passNew);     //Connect to your WiFi router
+  display.clear();
+  // Wait for connection
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -105,114 +200,157 @@ void setup() {
   delay(1000); //agar pesan terhubung ke jaringan bisa tampil
 }
 
+void setup() {
+  pinMode(tombol, INPUT_PULLUP);
+  delay(1000);
+  display.init();
+  display.flipScreenVertically();
+
+  //start Soft AP
+  WiFi.softAP(ssid, password);
+  String IP = WiFi.softAPIP().toString();
+
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(128 / 2, 64 / 2, IP);
+  display.display();
+
+  server.on("/", handleRoot);//Which routine to handle at root location
+  server.on("/action_page", handleForm); //form action is handled here
+
+  server.begin();//Start server
+}
+
 void loop() {
-  timeClient.update();
-
-  epochTime = timeClient.getEpochTime();
-  struct tm *ptm = gmtime ((time_t *)&epochTime); //NTP time structure
-  int tanggalIni = ptm->tm_mday;
-  int bulanIni = ptm->tm_mon + 1;
-  int tahunIni = ptm->tm_year + 1900; //NTP mengambil detik sejak tahun 1900
-  String namaBulan = bulan[bulanIni - 1];
-  String tanggal = String(tanggalIni) + " " + String(bulan[bulanIni - 1]) + "  " + String(tahunIni) ;
-
-  unsigned long currentMillis = millis();
-  WiFiClient client;
-  timeClient.update();
-  if (!client.connect(host, 80)) {
-    display.clear();
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    display.drawStringMaxWidth(128 / 2, 64 / 2, 128 , "Tidak Dapat Terhubung Ke Server");
-    display.display();
-    return;
-  }
-
-  /*
-    Kembali ke awal loop jika tidak ada tag yang terbaca pada reader.
-    Hal ini meringankan beban kerja atau mempersingkat proses saat
-    posisi idle
-  */
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    //cek tombol
-    if (digitalRead(tombol) == 1) {
-      kategori += 1;
-      if (kategori > 4) {
-        kategori = 1;
-      }
-      switch (kategori) {
-        case 1:
-          textKategori = "Masuk";
-          break;
-        case 2:
-          textKategori = "Mulai Istirahat";
-          break;
-        case 3:
-          textKategori = "Selesai Istirahat";
-          break;
-        case 4:
-          textKategori = "Pulang";
-          break;
-      }
-      delay(500); //agar penambahannya tidak terlalu cepat
-    }
-
-    if (currentMillis - previousMillis > interval) {
-      previousMillis = currentMillis;
-
+  if(ssidNew == ""){
+    server.handleClient();
+  } else {
+  
+    timeClient.update();
+  
+    epochTime = timeClient.getEpochTime();
+    struct tm *ptm = gmtime ((time_t *)&epochTime); //NTP time structure
+    int tanggalIni = ptm->tm_mday;
+    int bulanIni = ptm->tm_mon + 1;
+    int tahunIni = ptm->tm_year + 1900; //NTP mengambil detik sejak tahun 1900
+    String namaBulan = bulan[bulanIni - 1];
+    String tanggal = String(tanggalIni) + " " + String(bulan[bulanIni - 1]) + "  " + String(tahunIni) ;
+  
+    unsigned long currentMillis = millis();
+    WiFiClient client;
+    timeClient.update();
+    if (!client.connect(host, 80)) {
       display.clear();
-      display.setFont(ArialMT_Plain_24);
       display.setTextAlignment(TEXT_ALIGN_CENTER);
-      display.drawString(128 / 2, 10, String(timeClient.getFormattedTime()));
-      display.setFont(ArialMT_Plain_10);
-      display.drawString(128 / 2, 0, String(hari[timeClient.getDay()]) + ", " + tanggal);
-      display.setTextAlignment(TEXT_ALIGN_RIGHT);
-      display.drawString(128, 50, String(WiFi.RSSI()) + " dBm");
-      display.setTextAlignment(TEXT_ALIGN_LEFT);
-      display.drawString(0, 50, textKategori);
+      display.drawStringMaxWidth(128 / 2, 64 / 2, 128 , "Tidak Dapat Terhubung Ke Server");
       display.display();
-
+      return;
+    }
+  
+    /*
+      Kembali ke awal loop jika tidak ada tag yang terbaca pada reader.
+      Hal ini meringankan beban kerja atau mempersingkat proses saat
+      posisi idle
+    */
+    if ( ! mfrc522.PICC_IsNewCardPresent()) {
+      //cek tombol
+      if (digitalRead(tombol) == 1) {
+        kategori += 1;
+        if (kategori > 6) {
+          kategori = 1;
+        }
+        switch (kategori) {
+          case 1:
+            textKategori = "Masuk";
+            break;
+          case 2:
+            textKategori = "Mulai Istirahat";
+            break;
+          case 3:
+            textKategori = "Selesai Istirahat";
+            break;
+          case 4:
+            textKategori = "Pulang";
+            break;
+          case 5:
+            textKategori = "Mode Scan";
+            break;
+        }
+        delay(500); //agar penambahannya tidak terlalu cepat
+      }
+  
+      if (currentMillis - previousMillis > interval) {
+        previousMillis = currentMillis;
+  
+        display.clear();
+        display.setFont(ArialMT_Plain_24);
+        display.setTextAlignment(TEXT_ALIGN_CENTER);
+        display.drawString(128 / 2, 10, String(timeClient.getFormattedTime()));
+        display.setFont(ArialMT_Plain_10);
+        display.drawString(128 / 2, 0, String(hari[timeClient.getDay()]) + ", " + tanggal);
+        display.setTextAlignment(TEXT_ALIGN_RIGHT);
+        display.drawString(128, 50, String(WiFi.RSSI()) + " dBm");
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(0, 50, textKategori);
+        display.display();
+  
+        //delay(50);
+        return;
+      }
+    }
+  
+    // pilih satu tag
+    if ( ! mfrc522.PICC_ReadCardSerial()) {
       //delay(50);
       return;
     }
-  }
-
-  // pilih satu tag
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
-    //delay(50);
-    return;
-  }
-
-  dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
-
-  //kirim data
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-               "Host: " + host + "\r\n" +
-               "Connection: close\r\n\r\n");
-  unsigned long timeout = millis();
-  while (client.available() == 0) {
-    if (millis() - timeout > 1000) {
+  
+    dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
+  
+    //kirim data
+  
+    if (kategori == 5) {
       display.clear();
-      display.setFont(ArialMT_Plain_10);
       display.setTextAlignment(TEXT_ALIGN_CENTER);
-      display.drawStringMaxWidth(128 / 2, 64 / 2, 128, "Tidak dapat mengirimkan data absen ke server.");
+      display.setFont(ArialMT_Plain_10);
+      display.drawString(128 / 2, 10, "Tag Kartu Anda:");
+      display.setFont(ArialMT_Plain_16);
+      display.drawString(128 / 2, 30, uid);
       display.display();
-      client.stop();
-      return;
+      delay(3000); // ambil aman, biarkan uC posisi idle sekaligus tag ditampilkan lebih lama
+    } else {
+  
+      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                   "Host: " + host + "\r\n" +
+                   "Connection: close\r\n\r\n");
+      unsigned long timeout = millis();
+      while (client.available() == 0) {
+        if (millis() - timeout > 1000) {
+          display.clear();
+          display.setFont(ArialMT_Plain_10);
+          display.setTextAlignment(TEXT_ALIGN_CENTER);
+          display.drawStringMaxWidth(128 / 2, 64 / 2, 128, "Tidak dapat mengirimkan data absen ke server.");
+          display.display();
+          delay(3000);
+          client.stop();
+          return;
+        }
+      }
+      display.clear();
+      display.setFont(ArialMT_Plain_16);
+      display.setTextAlignment(TEXT_ALIGN_CENTER);
+      display.drawString(128 / 2, 10, textKategori);
+      display.setFont(ArialMT_Plain_10);
+      display.drawString(128 / 2, 30, "Data Absen Direkam :)");
+      display.display();
+  
+      while (client.available()) {
+        String line = client.readStringUntil('\r');
+      }
+      delay(1000); // ambil aman, biarkan uC posisi idle
     }
+    uid = ""; //kosongkan variabel UID setelah selesai digunakan
   }
-  display.clear();
-  display.setFont(ArialMT_Plain_16);
-  display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(128 / 2, 10, textKategori);
-  display.setFont(ArialMT_Plain_10);
-  display.drawString(128 / 2, 30, "Data Absen Direkam :)");
-  display.display();
-
-  while (client.available()) {
-    String line = client.readStringUntil('\r');
-  }
-
-  delay(1000); // ambil aman, biarkan uC posisi idle
 }
 
 /*
@@ -224,7 +362,6 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
     uid = uid + String(buffer[i], HEX);
   }
 
-  url = "/absensi/machine.php?tag=";
+  url = "/machine.php?tag=";
   url = url + uid + "&idmesin=" + idmesin + "&kategori=" + kategori;
-  uid = ""; //kosongkan variabel UID setelah selesai digunakan
 }
