@@ -24,78 +24,16 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
+#include "HTML.h"
 
 #define tombol 15
-
-//halaman html
-const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<style>
-input[type=text], select {
-  width: 100%;
-  padding: 12px 20px;
-  margin: 8px 0;
-  display: inline-block;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-sizing: border-box;
-}
-
-input[type=submit] {
-  width: 100%;
-  background-color: #4CAF50;
-  color: white;
-  padding: 14px 20px;
-  margin: 8px 0;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-input[type=submit]:hover {
-  background-color: #45a049;
-}
-
-div {
-  border-radius: 5px;
-  background-color: #f2f2f2;
-  padding: 20px;
-}
-</style>
-<body>
-
-<h3>Pengaturan Alat | Nusabot</h3>
-
-<div>
-  <form action="/action_page">
-    <label for="ssid">SSID</label>
-    <input type="text" id="fname" name="ssidNew" placeholder="SSID WiFi Anda">
-
-    <label for="pass">Password</label>
-    <input type="text" id="pass" name="passNew" placeholder="Kosongkan jika tidak menggunakan password">
-
-    <label for="zona">Zona Waktu</label>
-    <select id="zona" name="zona">
-      <option value="1">WIB</option>
-      <option value="2">WITA</option>
-      <option value="3">WIT</option>
-    </select>
-  
-    <input type="submit" value="Simpan">
-  </form>
-</div>
-
-</body>
-</html>
-
-)rawliteral";
 
 //Konfigurasi WiFi
 const char *ssid = "Nusabot-Absensi";
 const char *password = "";
 
-String ssidNew = "", passNew, zona;
+String ssidNew = "", passNew, zonaNew;
+int zona;
 
 ESP8266WebServer server(80); //Server pada port 80
 
@@ -119,7 +57,8 @@ SSD1306  display(0x3C, D1, D2);
   Ambil waktu dari NTP Server
 */
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200);
+//NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200);
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 /*
   Buat identitas mesin untuk mencatat di mesin mana pengguna yang
@@ -153,22 +92,15 @@ void handleRoot() {
 void handleForm() {
   ssidNew = server.arg("ssidNew"); 
   passNew = server.arg("passNew");
-  zona = server.arg("zona"); 
+  zonaNew = server.arg("zona");
+  zona = zonaNew.toInt();
+  
+  timeClient.setTimeOffset(zona); //ubah zona waktu berdasarkan inputan
 
-//  Serial.print("ssidNew:");
-//  Serial.println(ssidNew);
-//
-//  Serial.print("passNew:");
-//  Serial.println(passNew);
-//
-//  Serial.print("Zona:");
-//  Serial.println(zona);
-
-  String s = "<a href='/'> Go Back </a>";
-  server.send(200, "text/html", s); //Send web page
+  server.send(200, "text/html", sukses_html); //Kirim web page
+  delay(2000); //agar tidak langsung disconnect sehingga bisa menampilkan halaman informasi bahwa pengaturan telah disimpan
 
   WiFi.softAPdisconnect (true);
-//  Serial.println("SoftAP End");
   
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssidNew, passNew);     //Connect to your WiFi router
